@@ -439,7 +439,8 @@ def is_device(dev: str) -> bool:
     Determines whether the given path corresponds to a block device (not a partition).
 
     This function checks whether the provided device path represents a valid block device,
-    such as a physical disk (/dev/sda) or an allowed loop device, but excludes partitions
+    such as a physical disk (/dev/sda), an unlocked dm-crypt device (/dev/mapper/luks-xxx)
+    or an allowed loop device, but excludes partitions
     (/dev/sdc1). It performs several validation steps, including file existence, path format,
     device type, and additional checks for loop devices if allowed.
 
@@ -460,7 +461,7 @@ def is_device(dev: str) -> bool:
 
     TYPE = lsblk(dev).get('TYPE')
     if TYPE:
-        return TYPE in ['disk', 'mpath', 'loop']
+        return TYPE in ['disk', 'mpath', 'loop', 'crypt']
 
     # fallback to stat
     return _stat_is_device(os.lstat(dev).st_mode) and not is_partition(dev)
@@ -922,7 +923,7 @@ def get_devices(_sys_block_path='/sys/block', device=''):
 
     block_devs = get_block_devs_sysfs(_sys_block_path)
 
-    block_types = ['disk', 'mpath', 'lvm', 'part']
+    block_types = ['disk', 'mpath', 'lvm', 'part', 'crypt']
     if allow_loop_devices():
         block_types.append('loop')
 

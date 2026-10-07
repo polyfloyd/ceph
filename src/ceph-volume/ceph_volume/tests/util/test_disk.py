@@ -32,6 +32,11 @@ class TestFunctions:
     def test_is_device_type_mpath(self):
         assert disk.is_device('/dev/foo')
 
+    @patch('ceph_volume.util.disk.lsblk', MagicMock(return_value={'NAME': 'luks-foo', 'TYPE': 'crypt'}))
+    @patch('ceph_volume.util.disk.os.path.exists', MagicMock(return_value=True))
+    def test_is_device_type_crypt(self):
+        assert disk.is_device('/dev/mapper/luks-foo')
+
     @patch('ceph_volume.util.disk.lsblk', MagicMock(return_value={'NAME': 'foo1', 'TYPE': 'part'}))
     @patch('ceph_volume.util.disk.os.path.exists', MagicMock(return_value=True))
     def test_is_device_type_part(self):
@@ -396,6 +401,20 @@ class TestGetDevices(object):
             MockUdevData.return_value = mock_instance
             result = disk.get_devices()
         assert result[sda_path]['rotational'] == '1'
+
+    def test_crypt_device_is_included(self, patched_get_block_devs_sysfs, fake_filesystem):
+        crypt_path = '/dev/mapper/luks-foo'
+        patched_get_block_devs_sysfs.return_value = [['/dev/dm-0', crypt_path, 'crypt', '/dev/dm-0']]
+        fake_filesystem.create_dir('/sys/block/dm-0/slaves/sdb1')
+        fake_filesystem.create_file('/sys/block/dm-0/size', contents = '1024')
+        with patch("ceph_volume.util.disk.UdevData") as MockUdevData:
+            mock_instance = MagicMock()
+            mock_instance.is_lvm = False
+            MockUdevData.return_value = mock_instance
+            result = disk.get_devices()
+        assert list(result.keys()) == [crypt_path]
+        assert result[crypt_path]['human_readable_size'] == '512.00 KB'
+        assert result[crypt_path]['device_nodes'] == ['sdb1']
 
     def test_is_ceph_rbd(self, patched_get_block_devs_sysfs, fake_filesystem):
         rbd_path = '/dev/rbd0'
